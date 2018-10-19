@@ -232,12 +232,12 @@ def save_result_data(result_list, result_statistic_data):
 	DIR = 'test_result/'
 	TIME = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 
-	with open('%sraw_result_%s' %DIR %TIME, 'wb') as raw_data:
+	with open('%sraw_result_%s' %(DIR,TIME), 'wb') as raw_data:
 		pickle.dump(result_list, raw_data)
 
 
 	#Save statistic data to csv file
-	with open('%sraw_result_%s.csv' %DIR %TIME, 'w', newline='') as stat_data:
+	with open('%sraw_result_%s.csv' %(DIR,TIME), 'w', newline='') as stat_data:
 		wr = csv.writer(stat_data, quoting=csv.QUOTE_ALL)
 		wr.writerow(result_statistic_data)
 
