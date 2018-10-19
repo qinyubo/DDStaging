@@ -256,7 +256,7 @@ if __name__ == '__main__':
 						cache_size, 
 						evaluate_cache(dataset, 
 							'input_dataset/input_%d' %inputs_size,
-							'fp_model_support_%d' %fp_model_support_size,
+							'fp_model/fp_model_support_%d' %fp_model_support_size,
 							cache_size)
 						))
 
