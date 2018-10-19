@@ -6,13 +6,11 @@ import pickle
 import datetime
 import csv
 
-#Data set
-dataset = [['r', 'z', 'h', 'j', 'p'],
-			   ['z', 'y', 'x', 'w', 'v', 'u', 't', 's'],
-			   ['z'],
-			   ['r', 'x', 'n', 'o', 's'],
-			   ['y', 'r', 'x', 'z', 'q', 't', 'p'],
-			   ['y', 'z', 'x', 'e', 'q', 's', 't', 'm']]
+#Global variables
+TIME = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+TOT_HIT = 0
+TOT_MISS =0
+TOT_PREFETCH = 0
 
 dataset = [line.split() for line in open('kosarak.dat').readlines()]			   
 
@@ -74,10 +72,25 @@ def load_fp_model(file_name):
 def load_input_dataset(file_name):
 	with open (file_name, 'rb') as inputs:
 		inputs = pickle.load(inputs)
+
+	#input_set_info(inputs)
 	return inputs
 
-#Match input and cache
-def evaluate_cache(dataset, input_set, fp_model, cache_size):
+#Calculate the total input elements
+def input_set_info(input_file):
+	input_elem_tmp = [] # temporily store input element for outputing input information
+
+	for itemset in input_file:
+		for elem in itemset:
+			input_elem_tmp.append(elem)
+
+	print("Total element:", len(input_elem_tmp))
+	#find total unique elements
+	print ('Total unique elements:', len(list(set(input_elem_tmp))))
+
+
+#Evaluate cache with FP algorithm
+def evaluate_cache_fp(dataset, input_set, fp_model, cache_size):
 	size_single_input = 0 #size of single input set
 	num_hit = 0 #number of cache hit for a single input set
 	num_miss = 0 # number of cache miss for a single input set
@@ -85,8 +98,20 @@ def evaluate_cache(dataset, input_set, fp_model, cache_size):
 	hit_rate_list = [] #list of hit rate for all input data set
 	all_hit_rate_list = []
 	iterate = 0; #total iteration of experiment
-	num_inputs = 100; #number of input sets that randomly fetch from dataset
-	num_elem_cache = cache_size #number of element fetched to cache
+	#num_inputs = 100; #number of input sets that randomly fetch from dataset
+	num_elem_cache = 1 #number of element fetched to cache
+
+	
+
+	#Declare they are global variables
+	global TOT_HIT
+	global TOT_MISS
+	global TOT_PREFETCH
+
+	#Reset value
+	TOT_HIT = 0
+	TOT_MISS =0
+	TOT_PREFETCH = 0
 
 	#process data
 	#freq_itemsets = fp_process(dataset, 2, True)
@@ -98,52 +123,6 @@ def evaluate_cache(dataset, input_set, fp_model, cache_size):
 	#process result
 	processed_fp = []
 	processed_fp = process_result(freq_itemsets)
-
-	'''	#Main iteration, design for random inputs
-	for i in range(tot_iter):
-		#generate random inputset
-		#input_set = find_input(dataset, num_inputs)
-
-		#load input data
-		input_set = load_input_dataset('input_%d' %num_inputs)
-
-		#print ('input_set:', input_set)
-		hit_rate_list = []
-
-		for itemset in input_set:
-			#init, find the matched element for the first element in the itemset
-			matches = find_matched_elem(processed_fp, itemset[0])
-			cache_elem = find_succ(matches, num_elem_cache)
-			#print ('cache_elem1:',cache_elem)
-			size_single_input = len(itemset)
-			hit_rate = 0
-			num_hit = 0
-			num_miss = 0
-			
-			#iterate itemset
-			for elem in itemset:
-				if elem in cache_elem:
-					num_hit += 1
-					#print ('HIT:', 'itemset:', itemset, 'elem:', elem, 'cache:', cache_elem)
-					#continue
-				else:
-					num_miss += 1
-					#print ('MISS:', 'itemset:', itemset, 'elem:', elem, 'cache:', cache_elem)
-					#refetch the cache elements based on this missed element
-					matches = find_matched_elem(processed_fp, elem)
-					new_cache_elem = find_succ(matches, num_elem_cache)
-					#merge new_cache_elem with existed one without duplications
-					cache_elem = list(set(new_cache_elem + cache_elem))
-			hit_rate = num_hit / size_single_input
-			hit_rate_list.append(hit_rate)
-
-			#print ('cache_elem2:',cache_elem)
-			#print ('num_hit:', num_hit, 'size_single_input:', size_single_input, 'hit rate:', num_hit / size_single_input) 
-		
-		#store all hit rate result for all iteration	
-		all_hit_rate_list.append(hit_rate_list)
-
-	return all_hit_rate_list'''
 	
 
 	#Main loop for loading input
@@ -153,10 +132,13 @@ def evaluate_cache(dataset, input_set, fp_model, cache_size):
 	#print ('input_set:', input_set)
 	hit_rate_list = []
 
+	cache_elem = []
+
 	for itemset in input_set:
 		#init, find the matched element for the first element in the itemset
 		matches = find_matched_elem(processed_fp, itemset[0])
-		cache_elem = find_succ(matches, num_elem_cache)
+		tmp_cache = find_succ(matches, num_elem_cache)
+		cache_elem = list(set(cache_elem + tmp_cache))
 		#print ('cache_elem1:',cache_elem)
 		size_single_input = len(itemset)
 		hit_rate = 0
@@ -167,23 +149,96 @@ def evaluate_cache(dataset, input_set, fp_model, cache_size):
 		for elem in itemset:
 			if elem in cache_elem:
 				num_hit += 1
+				TOT_HIT += 1
 				#continue
 			else:
 				num_miss += 1
+				TOT_MISS += 1
 				#refetch the cache elements based on this missed element
 				matches = find_matched_elem(processed_fp, elem)
 				new_cache_elem = find_succ(matches, num_elem_cache)
+
+				#calculate the number of successors that need to be prefetch, which means not in the cache
+				#I can calc the intersection of new_cache_elem with cache_elem
+				TOT_PREFETCH += len(new_cache_elem) - len(set(new_cache_elem) & set(cache_elem))
 				
 				#evict cache when it is full
-				if len(cache_elem) >= num_elem_cache:
+				if len(cache_elem) >= cache_size:
 					#randomly pop out len(new_cache_elem) element
 					for i in range(len(new_cache_elem)):
 						cache_elem.pop(random.randrange(len(cache_elem)))
 				#merge new_cache_elem with existed one without duplications
 				cache_elem = list(set(new_cache_elem + cache_elem))
-
+		
 		hit_rate = num_hit / size_single_input
 		hit_rate_list.append(hit_rate)
+	
+
+	#print ('TOT_HIT',TOT_HIT, 'TOT_MISS',TOT_MISS, 'TOT_PREFETCH',TOT_PREFETCH)
+
+	return hit_rate_list
+
+
+
+#Evaluate cache with passive strategy
+def evaluate_cache_base(input_set, cache_size):
+	size_single_input = 0 #size of single input set
+	num_hit = 0 #number of cache hit for a single input set
+	num_miss = 0 # number of cache miss for a single input set
+	hit_rate = 0 #hit rate for a single input set
+	hit_rate_list = [] #list of hit rate for all input data set
+	all_hit_rate_list = []
+	iterate = 0; #total iteration of experiment
+	#num_inputs = 100; #number of input sets that randomly fetch from dataset
+
+
+	#Declare they are global variables
+	global TOT_HIT
+	global TOT_MISS
+	global TOT_PREFETCH
+
+	#Reset value
+	TOT_HIT = 0
+	TOT_MISS =0
+	TOT_PREFETCH = 0
+
+
+
+	#Main loop for loading input
+	#load input data
+	input_set = load_input_dataset(input_set)
+
+	#print ('input_set:', input_set)
+	hit_rate_list = []
+
+	cache_elem = []
+
+	for itemset in input_set:
+		size_single_input = len(itemset)
+		hit_rate = 0
+		num_hit = 0
+		num_miss = 0
+		
+		#iterate itemset
+		for elem in itemset:
+			if elem in cache_elem:
+				num_hit += 1
+				TOT_HIT += 1
+				#continue
+			else:
+				num_miss += 1
+				TOT_MISS += 1
+				#evict cache when it is full
+				if len(cache_elem) >= cache_size:
+					cache_elem.pop(random.randrange(len(cache_elem))) #randomly pop out one element
+				else:
+					#Put this element into cache
+					cache_elem.append(elem)
+				
+		hit_rate = num_hit / size_single_input
+		hit_rate_list.append(hit_rate)
+
+	#print ('TOT_HIT',TOT_HIT, 'TOT_MISS',TOT_MISS, 'TOT_PREFETCH',TOT_PREFETCH)
 
 	return hit_rate_list
 
@@ -227,44 +282,121 @@ def process_result_list_loaded_input(result_list):
 	plt.show()'''
 	return avg_list
 
-#Save result list
-def save_result_data(result_list, result_statistic_data):
-	DIR = 'test_result/'
-	TIME = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+#Calculate average
+def cal_average(result_list):
+	#Convert generator to list
+	input_list = list(result_list)
+	avg_list = []
+	#average
+	for i in range(len(input_list)):
+		avg_hit_rate = np.mean(input_list[i][3])
+	#	print ('Average hit rate:', avg_hit_rate)
+		avg_list.append(avg_hit_rate)	
+	return avg_list
 
-	with open('%sraw_result_%s' %(DIR,TIME), 'wb') as raw_data:
+#Calculate the total data fetch cost
+#WARNING! it use global variables, be awared!
+def cal_tot_cost():
+	tot_cost = TOT_HIT*1 + TOT_MISS*120 + TOT_PREFETCH*50
+	#print ('TOT_HIT',TOT_HIT, 'TOT_MISS',TOT_MISS, 'TOT_PREFETCH',TOT_PREFETCH, 'TOT_COST', tot_cost)
+	return tot_cost
+
+#Calculate standard diviation
+def cal_deviation(result_list):
+	input_list = list(result_list)
+	dev_list = []
+
+	for i in range(len(input_list)):
+		dev_hit_rate = np.std(input_list[i][3], ddof=1)
+	#	print ('Average hit rate:', avg_hit_rate)
+		dev_list.append(dev_hit_rate)	
+	return dev_list
+
+#Save result list
+def save_fp_raw_data(result_list):
+	DIR = 'test_result/'
+
+	with open('%sfp_raw_result_%s' %(DIR,TIME), 'wb') as raw_data:
 		pickle.dump(result_list, raw_data)
 
 
-	#Save statistic data to csv file
-	with open('%sraw_result_%s.csv' %(DIR,TIME), 'w', newline='') as stat_data:
+#Save result list
+def save_base_raw_data(result_list):
+	DIR = 'test_result/'
+
+	with open('%sbase_raw_result_%s' %(DIR,TIME), 'wb') as raw_data:
+		pickle.dump(result_list, raw_data)
+
+#Save statistic data to csv file
+def save_statistic_date(file_1, file_2):
+	DIR = 'test_result/'
+
+	with open('%savg_result_%s.csv' %(DIR,TIME), 'w', newline='') as stat_data:
 		wr = csv.writer(stat_data, quoting=csv.QUOTE_ALL)
-		wr.writerow(result_statistic_data)
+		wr.writerow(file_1)
+
+	with open('%sdev_result_%s.csv' %(DIR,TIME), 'w', newline='') as stat_data:
+		wr = csv.writer(stat_data, quoting=csv.QUOTE_ALL)
+		wr.writerow(file_2)
 
 #Call fp module and execute FP-growth alg
 if __name__ == '__main__':
 
-	result_list = []
-	result_statistic_data = []
+	result_list_fp = []
+	result_list_base = []
+	#result_statistic_data = []
+	result_avg = []
+	result_dev = []
 
-	for inputs_size in [100,500,1000]:
-		for fp_model_support_size in [3000, 6000, 9000]:
-			for cache_size in [10,50,100]:
-					result_list.append((
+
+#Evaluate FP cache approach
+	for inputs_size in [200]:
+		for fp_model_support_size in [4000]:
+			for cache_size in [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4192]:
+					result_list_fp.append((
 						inputs_size,
 						fp_model_support_size,
 						cache_size, 
-						evaluate_cache(dataset, 
+						evaluate_cache_fp(dataset, 
 							'input_dataset/input_%d' %inputs_size,
 							'fp_model/fp_model_support_%d' %fp_model_support_size,
-							cache_size)
+							cache_size),
+						TOT_HIT,
+						TOT_MISS,
+						TOT_PREFETCH,
+						cal_tot_cost() #This function involve global variable, be awared!
 						))
+					print(inputs_size, fp_model_support_size, cache_size, "tot_cost:", cal_tot_cost())
 
-	result_statistic_data = process_result_list_loaded_input(result_list)
+	save_fp_raw_data(result_list_fp)
+	'''	
+	#result_statistic_data = process_result_list_loaded_input(result_list)
+	result_avg = cal_average(result_list)
+	result_dev = cal_deviation(result_dev)
+	'''
+	
+	#save_statistic_date(result_avg, result_dev)
 
-	save_result_data(result_list, result_statistic_data)
+
+#Evaluate base cache approach
+	for inputs_size in [200]:
+		for cache_size in [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4192]:
+				result_list_base.append((
+					inputs_size,
+					cache_size, 
+					evaluate_cache_base( 
+						'input_dataset/input_%d' %inputs_size,
+						cache_size),
+					TOT_HIT,
+					TOT_MISS,
+					cal_tot_cost() #This function involve global variable, be awared!
+					))
+				print(inputs_size, cache_size, "tot_cost:", cal_tot_cost())
+
+	save_base_raw_data(result_list_base)
 
 
+	print ("Time:", TIME)
 
 
 
