@@ -351,7 +351,7 @@ if __name__ == '__main__':
 
 #Evaluate FP cache approach
 	for inputs_size in [200]:
-		for fp_model_support_size in [4000]:
+		for fp_model_support_size in [4000, 6000, 8000, 10000]:
 			for cache_size in [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4192]:
 					result_list_fp.append((
 						inputs_size,
